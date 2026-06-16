@@ -135,12 +135,12 @@ if (-not (Test-Path $InstallDir)) {
 
 # 创建 .cmd wrapper
 $wrapperPath = "$InstallDir\openclaw-bg.cmd"
-$escapedBash = $bashExe
-@"
-@echo off
-set OPENCLAW_BG_HOME=$RepoDir
-"$escapedBash" "%OPENCLAW_BG_HOME%\bin\openclaw-bg" %*
-"@ | Set-Content -Path $wrapperPath -Encoding ASCII
+$lines = @(
+    '@echo off',
+    "set OPENCLAW_BG_HOME=$RepoDir",
+    "`"$bashExe`" `"%OPENCLAW_BG_HOME%\bin\openclaw-bg`" %*"
+)
+$lines -join "`r`n" | Set-Content -Path $wrapperPath -Encoding ASCII
 
 Write-Success "  + openclaw-bg -> $wrapperPath"
 
