@@ -2,11 +2,9 @@
 
 openclaw 后台启动脚本
 
-## 快速开始
+## 安装
 
-### 远程安装（推荐）
-
-一条命令，自动下载并安装，支持 Windows / macOS / Linux：
+一条命令即可安装，支持 Windows / macOS / Linux。
 
 **Git Bash / Linux / macOS：**
 
@@ -14,119 +12,43 @@ openclaw 后台启动脚本
 curl -sSL https://raw.githubusercontent.com/gochangc/openclaw-bg/master/install.sh | bash
 ```
 
-**Git Bash / Linux / macOS：**
-
-```bash
-curl -sSL https://raw.githubusercontent.com/gochangc/openclaw-bg/master/install.sh | bash
-```
-
-**Windows PowerShell（无需 curl，无需 bash）：**
+**Windows PowerShell：**
 
 ```powershell
 irm https://raw.githubusercontent.com/gochangc/openclaw-bg/master/install.ps1 | iex
 ```
 
-安装过程会自动：
-- 检测 git 是否可用（需要 git 来下载仓库）
-- 将仓库 clone 到 `~/.openclaw-bg`
-- 检测 openclaw 是否已安装
-- 将 `openclaw-bg` 命令安装到系统 PATH
-- 重复执行安装脚本会自动更新到最新版本
+> 安装过程自动完成：下载仓库、配置 PATH、安装命令。无需任何手动操作。
 
-### 本地安装
-
-如果你已经 clone 了仓库：
+## 使用
 
 ```bash
-cd openclaw-bg
-./install.sh
+openclaw-bg start              # 后台启动
+openclaw-bg start --verbose    # 传递参数给 Gateway
+openclaw-bg stop               # 停止
+openclaw-bg status             # 查看状态
+openclaw-bg help               # 查看帮助
 ```
 
-### 使用
+## 卸载
 
 ```bash
-# 后台启动
-openclaw-bg start
-
-# 传递参数给 Gateway
-openclaw-bg start --port 18789 --verbose
-
-# 停止
-openclaw-bg stop
-
-# 查看状态
-openclaw-bg status
-
-# 查看帮助
-openclaw-bg help
+openclaw-bg uninstall
 ```
-
-### 卸载
-
-```bash
-# Git Bash / Linux / macOS
-cd ~/.openclaw-bg && ./uninstall.sh
-```
-
-```powershell
-# Windows PowerShell
-cd ~/.openclaw-bg; .\uninstall.ps1
-```
-
-卸载时会自动检查并停止正在运行的 Gateway 进程。
-
-## 目录结构
-
-```
-~/.openclaw-bg/            # 项目目录（远程安装时默认位置）
-├── bin/
-│   └── openclaw-bg        # 核心脚本
-├── logs/                   # 日志目录（运行后自动生成）
-│   ├── gateway.log         # Gateway 运行输出
-│   ├── openclaw-bg.log     # 启停事件记录
-│   └── install.log         # 安装/卸载记录
-├── install.sh              # 安装脚本
-├── uninstall.sh            # 卸载脚本
-└── README.md
-```
-
-## 命令参考
-
-| 命令 | 说明 |
-|------|------|
-| `openclaw-bg start [参数...]` | 后台启动 Gateway，参数透传给 `openclaw gateway run` |
-| `openclaw-bg stop` | 停止 Gateway（先 SIGTERM，10 秒后 SIGKILL） |
-| `openclaw-bg status` | 查看 Gateway 运行状态 |
-| `openclaw-bg help` | 显示帮助信息 |
 
 ## 日志
 
-所有日志统一存放在项目 `logs/` 目录下：
-
-| 日志文件 | 内容 |
-|----------|------|
-| `gateway.log` | Gateway 进程的标准输出和标准错误 |
-| `openclaw-bg.log` | 启停操作事件，带时间戳 |
-| `install.log` | 安装和卸载操作记录 |
-
-## 自定义安装路径
-
-```bash
-# 方式一：指定命令安装目录
-./install.sh /usr/local/bin
-
-# 方式二：指定项目 clone 目录
-OPENCLAW_BG_HOME=/opt/openclaw-bg curl -sSL https://.../install.sh | bash
-
-# 方式三：环境变量
-OPENCLAW_BG_PREFIX=/opt/bin ./install.sh
-```
+| 文件 | 内容 |
+|------|------|
+| `~/.openclaw-bg/logs/gateway.log` | Gateway 运行输出 |
+| `~/.openclaw-bg/logs/openclaw-bg.log` | 启停事件记录 |
+| `~/.openclaw-bg/logs/install.log` | 安装/卸载记录 |
 
 ## 依赖
 
-- [OpenClaw](https://docs.openclaw.ai) CLI（需提前安装：`npm install -g openclaw`）
-- Git（远程安装时需要，用于下载仓库）
-- Bash（Linux / macOS 自带，Windows 下使用 Git Bash 或 MSYS2）
+- [OpenClaw](https://docs.openclaw.ai) CLI（`npm install -g openclaw`）
+- Git（下载仓库需要，Windows / macOS / Linux 均自带或可安装）
+- Bash（macOS / Linux 自带；Windows 下 Git Bash 自带）
 
 ## 许可证
 

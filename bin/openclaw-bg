@@ -4,15 +4,15 @@
 #
 # 用法: openclaw-bg start [参数...]
 #       openclaw-bg stop
+#       openclaw-bg status
+#       openclaw-bg uninstall
 # =============================================================================
 set -euo pipefail
 
 # ---- 确定项目根目录 ----
 if [[ -n "${OPENCLAW_BG_HOME:-}" ]]; then
-    # 通过安装脚本执行时，已预设项目路径
     PROJECT_DIR="$OPENCLAW_BG_HOME"
 else
-    # 直接从项目目录执行时，通过脚本位置推导
     PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 fi
 
@@ -22,6 +22,7 @@ PID_FILE="$STATE_DIR/gateway.pid"
 LOG_DIR="$PROJECT_DIR/logs"
 GATEWAY_LOG="$LOG_DIR/gateway.log"
 EVENT_LOG="$LOG_DIR/openclaw-bg.log"
+WRAPPER_FILE="$PROJECT_DIR/.wrapper-path"
 
 # ---- 日志函数 ----
 log_event() {
@@ -49,7 +50,6 @@ is_running() {
 # ---- 终止进程 ----
 stop_process() {
     local pid="$1"
-
     if kill "$pid" 2>/dev/null; then
         for _ in $(seq 1 10); do
             if ! kill -0 "$pid" 2>/dev/null; then
@@ -83,7 +83,6 @@ cmd_start() {
 
     echo "OpenClaw Gateway 已启动 (PID: $bg_pid)"
     echo "运行日志: $GATEWAY_LOG"
-    echo "事件日志: $EVENT_LOG"
     log_event "start" "启动成功 (PID: $bg_pid)"
 }
 
@@ -111,10 +110,8 @@ cmd_stop() {
 
     echo "正在停止 OpenClaw Gateway (PID: $pid)..."
     log_event "stop" "开始停止 (PID: $pid)"
-
     stop_process "$pid"
     rm -f "$PID_FILE"
-
     echo "OpenClaw Gateway 已停止"
     log_event "stop" "停止成功 (PID: $pid)"
 }
@@ -126,10 +123,56 @@ cmd_status() {
     if pid=$(is_running); then
         echo "OpenClaw Gateway 运行中 (PID: $pid)"
         echo "运行日志: $GATEWAY_LOG"
-        echo "事件日志: $EVENT_LOG"
     else
         echo "OpenClaw Gateway 未运行"
     fi
+}
+
+# ============================
+# 子命令: uninstall
+# ============================
+cmd_uninstall() {
+    echo "正在卸载 OpenClaw BG..."
+
+    # 停止 Gateway
+    if pid=$(is_running); then
+        echo "  停止运行中的 Gateway (PID: $pid)..."
+        stop_process "$pid"
+        rm -f "$PID_FILE"
+    fi
+
+    # 找到并删除 wrapper
+    local wrapper=""
+    if [[ -f "$WRAPPER_FILE" ]]; then
+        wrapper="$(cat "$WRAPPER_FILE")"
+        echo "  移除命令: $wrapper"
+        rm -f "$wrapper"
+    fi
+
+    # 额外搜索 PATH 中的 wrapper
+    local found
+    found="$(which openclaw-bg 2>/dev/null || true)"
+    if [[ -n "$found" ]] && [[ "$found" != "$PROJECT_DIR/bin/openclaw-bg" ]]; then
+        echo "  移除命令: $found"
+        rm -f "$found"
+    fi
+    # Windows .cmd wrapper
+    found="$(which openclaw-bg.cmd 2>/dev/null || true)"
+    if [[ -n "$found" ]]; then
+        echo "  移除命令: $found"
+        rm -f "$found"
+    fi
+
+    # 清理状态文件
+    rm -f "$PID_FILE"
+
+    # 后台删除项目目录（当前进程还在使用）
+    echo "  清理项目文件..."
+    (sleep 1; rm -rf "$PROJECT_DIR") &
+
+    echo ""
+    echo "OpenClaw BG 已卸载"
+    log_event "uninstall" "卸载完成"
 }
 
 # ============================
@@ -145,6 +188,7 @@ cmd_help() {
     echo "                    参数会透传给 openclaw gateway run"
     echo "  stop             停止 OpenClaw Gateway"
     echo "  status           查看 Gateway 运行状态"
+    echo "  uninstall        卸载 OpenClaw BG"
     echo "  help             显示此帮助信息"
     echo ""
     echo "示例:"
@@ -152,10 +196,7 @@ cmd_help() {
     echo "  openclaw-bg start --port 18789 --verbose"
     echo "  openclaw-bg stop"
     echo "  openclaw-bg status"
-    echo ""
-    echo "日志文件:"
-    echo "  运行日志: $GATEWAY_LOG"
-    echo "  事件日志: $EVENT_LOG"
+    echo "  openclaw-bg uninstall"
 }
 
 # ============================
@@ -171,6 +212,9 @@ case "${1:-}" in
         ;;
     status)
         cmd_status
+        ;;
+    uninstall)
+        cmd_uninstall
         ;;
     help|-h|--help)
         cmd_help
