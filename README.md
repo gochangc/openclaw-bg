@@ -14,19 +14,17 @@ openclaw 后台启动脚本
 curl -sSL https://raw.githubusercontent.com/gochangc/openclaw-bg/master/install.sh | bash
 ```
 
-**Windows（推荐使用 Git Bash）：**
+**Git Bash / Linux / macOS：**
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/gochangc/openclaw-bg/master/install.sh | bash
 ```
 
-**Windows PowerShell：**
+**Windows PowerShell（无需 curl，无需 bash）：**
 
 ```powershell
-curl.exe -sSL https://raw.githubusercontent.com/gochangc/openclaw-bg/master/install.sh | & "C:\Program Files\Git\usr\bin\bash.exe"
+irm https://raw.githubusercontent.com/gochangc/openclaw-bg/master/install.ps1 | iex
 ```
-
-> 注意：如果 Git 安装在其他路径，请替换 `bash.exe` 的实际位置。也可直接在 Git Bash 中执行安装命令，更简单。
 
 安装过程会自动：
 - 检测 git 是否可用（需要 git 来下载仓库）
@@ -66,7 +64,13 @@ openclaw-bg help
 ### 卸载
 
 ```bash
+# Git Bash / Linux / macOS
 cd ~/.openclaw-bg && ./uninstall.sh
+```
+
+```powershell
+# Windows PowerShell
+cd ~/.openclaw-bg; .\uninstall.ps1
 ```
 
 卸载时会自动检查并停止正在运行的 Gateway 进程。
