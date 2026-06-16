@@ -1,11 +1,61 @@
 #!/usr/bin/env bash
 # =============================================================================
 # install.sh — 安装 openclaw-bg 到系统 PATH
+#
+# 本地安装:  ./install.sh
+# 远程安装:  curl -sSL https://raw.githubusercontent.com/gochangc/openclaw-bg/master/install.sh | bash
+#
 # 支持 Linux / macOS / Windows (Git Bash, MSYS2)
 # =============================================================================
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# ---- 远程/本地模式检测 ----
+# 如果当前目录下没有 bin/openclaw-bg，说明是通过 curl|bash 远程执行的，
+# 需要先 clone 仓库，再调用本地安装流程
+if [[ ! -f "${0:-}" ]] || [[ ! -f "$(cd "$(dirname "${BASH_SOURCE[0]:-.}")" 2>/dev/null && pwd)/bin/openclaw-bg" ]]; then
+    REPO_URL="https://github.com/gochangc/openclaw-bg.git"
+    REPO_DIR="${OPENCLAW_BG_HOME:-$HOME/.openclaw-bg}"
+
+    echo "========================================"
+    echo "  OpenClaw BG 远程安装"
+    echo "========================================"
+    echo ""
+
+    # 检查依赖
+    if ! command -v git &>/dev/null; then
+        echo "错误: 未检测到 git，请先安装 git"
+        echo "  Windows: https://git-scm.com"
+        echo "  Linux:   sudo apt install git  或  sudo yum install git"
+        echo "  macOS:   xcode-select --install"
+        exit 1
+    fi
+
+    # 下载仓库
+    if [[ -d "$REPO_DIR/.git" ]]; then
+        echo "仓库已存在，正在更新..."
+        cd "$REPO_DIR"
+        git pull --ff-only origin master 2>/dev/null || echo "  (跳过更新, 使用已有版本)"
+    else
+        echo "正在下载 openclaw-bg..."
+        if [[ -d "$REPO_DIR" ]]; then
+            rm -rf "$REPO_DIR"
+        fi
+        git clone --depth 1 "$REPO_URL" "$REPO_DIR"
+    fi
+
+    echo ""
+    echo "下载完成，开始本地安装..."
+    echo ""
+
+    # 用本地副本重新执行
+    exec bash "$REPO_DIR/install.sh"
+fi
+
+# ==============================
+# 以下为本地安装流程
+# ==============================
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_DIR="$SCRIPT_DIR/logs"
 INSTALL_LOG="$LOG_DIR/install.log"
 
@@ -75,12 +125,13 @@ print_usage() {
     echo -e "  传递参数:  ${GREEN}openclaw-bg start --port 18789 --verbose${NC}"
     echo -e "  停止服务:  ${GREEN}openclaw-bg stop${NC}"
     echo -e "  查看状态:  ${GREEN}openclaw-bg status${NC}"
+    echo -e "  查看帮助:  ${GREEN}openclaw-bg help${NC}"
     echo ""
+    echo -e "  项目目录:  ${YELLOW}$SCRIPT_DIR${NC}"
     echo -e "  运行日志:  ${YELLOW}$LOG_DIR/gateway.log${NC}"
     echo -e "  事件日志:  ${YELLOW}$LOG_DIR/openclaw-bg.log${NC}"
-    echo -e "  安装日志:  ${YELLOW}$INSTALL_LOG${NC}"
     echo ""
-    echo -e "  卸载:      cd ${YELLOW}$SCRIPT_DIR${NC} && ./uninstall.sh"
+    echo -e "  卸载方式:  cd ${YELLOW}$SCRIPT_DIR${NC} && ./uninstall.sh"
     echo ""
 }
 
@@ -96,8 +147,8 @@ main() {
     echo -e "${CYAN}OpenClaw BG 安装脚本${NC}"
     echo ""
 
-    # [1/4] 环境检测
-    echo -e "${CYAN}[1/4]${NC} 环境检测"
+    # [1/5] 环境检测
+    echo -e "${CYAN}[1/5]${NC} 环境检测"
     echo -e "  当前系统: $(uname -s)"
     echo -e "  项目目录: $SCRIPT_DIR"
     echo -e "  安装目标: $target_dir"
@@ -114,8 +165,17 @@ main() {
     fi
     echo ""
 
-    # [2/4] 创建安装目录
-    echo -e "${CYAN}[2/4]${NC} 准备安装目录"
+    # [2/5] 检查 git（后续更新需要）
+    echo -e "${CYAN}[2/5]${NC} 依赖检查"
+    if command -v git &>/dev/null; then
+        echo -e "  git: ${GREEN}已安装${NC}"
+    else
+        echo -e "  git: ${YELLOW}未安装（不影响使用，但无法在线更新）${NC}"
+    fi
+    echo ""
+
+    # [3/5] 创建安装目录
+    echo -e "${CYAN}[3/5]${NC} 准备安装目录"
     if [[ ! -d "$target_dir" ]]; then
         echo -e "  创建: ${YELLOW}$target_dir${NC}"
         mkdir -p "$target_dir"
@@ -125,8 +185,8 @@ main() {
     fi
     echo ""
 
-    # [3/4] 安装命令（生成 wrapper 脚本）
-    echo -e "${CYAN}[3/4]${NC} 安装命令"
+    # [4/5] 安装命令（生成 wrapper 脚本）
+    echo -e "${CYAN}[4/5]${NC} 安装命令"
     cat > "$wrapper_path" << WRAPPER_EOF
 #!/usr/bin/env bash
 # openclaw-bg wrapper — 由 install.sh 自动生成
@@ -139,8 +199,8 @@ WRAPPER_EOF
 
     echo ""
 
-    # [4/4] PATH 检查
-    echo -e "${CYAN}[4/4]${NC} PATH 检查"
+    # [5/5] PATH 检查
+    echo -e "${CYAN}[5/5]${NC} PATH 检查"
     if check_in_path "$target_dir"; then
         echo -e "  ✓ 目录已在 PATH 中"
         log_msg "PATH 检查: 通过 ($target_dir)"
