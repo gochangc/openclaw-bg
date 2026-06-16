@@ -1,6 +1,6 @@
 # OpenClaw BG
 
-OpenClaw Gateway 后台管理工具，提供一条命令启动、一条命令停止的便捷方式。
+openclaw 后台启动脚本
 
 ## 快速开始
 
@@ -8,15 +8,19 @@ OpenClaw Gateway 后台管理工具，提供一条命令启动、一条命令停
 
 一条命令，自动下载并安装，支持 Windows / macOS / Linux：
 
+**Git Bash / Linux / macOS：**
+
 ```bash
 curl -sSL https://raw.githubusercontent.com/gochangc/openclaw-bg/master/install.sh | bash
 ```
 
-或者使用 wget：
+**Windows PowerShell：**
 
-```bash
-wget -qO- https://raw.githubusercontent.com/gochangc/openclaw-bg/master/install.sh | bash
+```powershell
+curl.exe -sSL https://raw.githubusercontent.com/gochangc/openclaw-bg/master/install.sh | bash
 ```
+
+> 注意：Windows PowerShell 中 `curl` 默认指向 `Invoke-WebRequest`，需使用 `curl.exe` 调用真正的 curl。
 
 安装过程会自动：
 - 检测 git 是否可用（需要 git 来下载仓库）
