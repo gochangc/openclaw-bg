@@ -40,15 +40,6 @@ if ($openclawPath) {
     return
 }
 
-$gitPath = Get-Command git -ErrorAction SilentlyContinue
-if ($gitPath) {
-    Write-Success "  git: 已安装"
-} else {
-    Write-Err "  git: 未安装"
-    Write-Err "请先安装: https://git-scm.com"
-    return
-}
-
 # 查找 bash
 $bashExe = $null
 $bashCmd = Get-Command bash -ErrorAction SilentlyContinue
@@ -102,23 +93,24 @@ Write-Host ""
 # ---- [3/4] 下载仓库 ----
 Write-Info "[3/4] 下载仓库"
 
-if (Test-Path "$RepoDir\.git") {
-    Write-Host "  仓库已存在，正在更新..."
-    Push-Location $RepoDir
-    try {
-        git pull --ff-only origin master 2>&1 | Out-Null
-        Write-Success "  更新完成"
-    } catch {
-        Write-Warn "  (跳过更新)"
-    }
-    Pop-Location
-} else {
-    if (Test-Path $RepoDir) {
-        Remove-Item -Recurse -Force $RepoDir
-    }
-    Write-Host "  正在 clone..."
-    git clone --depth 1 https://github.com/gochangc/openclaw-bg.git $RepoDir 2>&1 | Out-Null
-    Write-Success "  clone 完成"
+$ArchiveUrl = "https://github.com/gochangc/openclaw-bg/archive/refs/heads/master.zip"
+
+if (Test-Path $RepoDir) {
+    Remove-Item -Recurse -Force $RepoDir -ErrorAction SilentlyContinue
+}
+
+Write-Host "  正在下载..."
+$tmpZip = "$env:TEMP\openclaw-bg-$([System.IO.Path]::GetRandomFileName()).zip"
+$tmpDir = "$env:TEMP\openclaw-bg-$([System.IO.Path]::GetRandomFileName())"
+try {
+    Invoke-WebRequest -Uri $ArchiveUrl -OutFile $tmpZip
+    Expand-Archive -Path $tmpZip -DestinationPath $tmpDir -Force
+    $innerDir = Get-ChildItem -Directory $tmpDir | Select-Object -First 1
+    Move-Item "$($innerDir.FullName)\*" $RepoDir -Force
+    Write-Success "  下载完成"
+} finally {
+    Remove-Item -Recurse -Force $tmpDir -ErrorAction SilentlyContinue
+    Remove-Item -Force $tmpZip -ErrorAction SilentlyContinue
 }
 
 Write-Host ""

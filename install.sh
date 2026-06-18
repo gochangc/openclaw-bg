@@ -11,7 +11,7 @@ set -euo pipefail
 
 # ---- 远程/本地模式检测 ----
 if [[ ! -f "${0:-}" ]] || [[ ! -f "$(cd "$(dirname "${BASH_SOURCE[0]:-.}")" 2>/dev/null && pwd)/bin/openclaw-bg" ]]; then
-    REPO_URL="https://github.com/gochangc/openclaw-bg.git"
+    ARCHIVE_URL="https://github.com/gochangc/openclaw-bg/archive/refs/heads/master.tar.gz"
     REPO_DIR="${OPENCLAW_BG_HOME:-$HOME/.openclaw-bg}"
 
     echo "========================================"
@@ -19,25 +19,30 @@ if [[ ! -f "${0:-}" ]] || [[ ! -f "$(cd "$(dirname "${BASH_SOURCE[0]:-.}")" 2>/d
     echo "========================================"
     echo ""
 
-    if ! command -v git &>/dev/null; then
-        echo "错误: 未检测到 git，请先安装 git"
-        echo "  Windows: https://git-scm.com"
-        echo "  Linux:   sudo apt install git  或  sudo yum install git"
-        echo "  macOS:   xcode-select --install"
+    # 检测下载工具
+    if command -v curl &>/dev/null; then
+        DOWNLOADER="curl"
+    elif command -v wget &>/dev/null; then
+        DOWNLOADER="wget"
+    else
+        echo "错误: 未检测到 curl 或 wget，请先安装其中之一"
+        echo "  curl: https://curl.se"
+        echo "  wget: https://www.gnu.org/software/wget/"
         exit 1
     fi
 
-    if [[ -d "$REPO_DIR/.git" ]]; then
-        echo "仓库已存在，正在更新..."
-        cd "$REPO_DIR"
-        git pull --ff-only origin master 2>/dev/null || echo "  (跳过更新)"
-    else
-        echo "正在下载 openclaw-bg..."
-        [[ -d "$REPO_DIR" ]] && rm -rf "$REPO_DIR"
-        git clone --depth 1 "$REPO_URL" "$REPO_DIR"
-    fi
+    echo "正在下载 openclaw-bg..."
+    [[ -d "$REPO_DIR" ]] && rm -rf "$REPO_DIR"
 
-    echo ""
+    TMP_DIR="$(mktemp -d)"
+    if [[ "$DOWNLOADER" == "curl" ]]; then
+        curl -fsSL "$ARCHIVE_URL" -o "$TMP_DIR/openclaw-bg.tar.gz"
+    else
+        wget -q "$ARCHIVE_URL" -O "$TMP_DIR/openclaw-bg.tar.gz"
+    fi
+    tar xzf "$TMP_DIR/openclaw-bg.tar.gz" -C "$TMP_DIR"
+    mv "$TMP_DIR/openclaw-bg-master" "$REPO_DIR"
+    rm -rf "$TMP_DIR"
     echo "下载完成，开始本地安装..."
     echo ""
     exec bash "$REPO_DIR/install.sh"

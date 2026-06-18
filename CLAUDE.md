@@ -13,7 +13,7 @@ install.sh/install.ps1  →  生成 wrapper 脚本到 PATH  →  wrapper 调用 
 ```
 
 - **`bin/openclaw-bg`** — 核心脚本，通过 `OPENCLAW_BG_HOME` 环境变量定位项目根目录
-- **`install.sh`** — bash 安装器，支持远程检测（当脚本旁无 `bin/openclaw-bg` 时自动 clone 仓库）
+- **`install.sh`** — bash 安装器，支持远程检测（当脚本旁无 `bin/openclaw-bg` 时自动下载 tar.gz 解压）
 - **`install.ps1`** — PowerShell 安装器，生成 `.cmd` wrapper 调用 Git Bash 执行核心脚本
 - **`uninstall.sh` / `uninstall.ps1`** — 独立卸载脚本（传统方式）；`openclaw-bg uninstall` 是推荐方式
 
@@ -21,7 +21,7 @@ install.sh/install.ps1  →  生成 wrapper 脚本到 PATH  →  wrapper 调用 
 
 ```
 远程模式（检测到脚本旁无 bin/openclaw-bg）:
-  clone 仓库到 ~/.openclaw-bg → exec 本地 install.sh
+  下载 tar.gz/zip 解压到 ~/.openclaw-bg → exec 本地 install.sh
 
 本地模式:
   生成 wrapper 脚本 → 写入 PATH → 自动配置 shell RC/PowerShell PATH
