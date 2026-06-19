@@ -50,6 +50,37 @@ is_running() {
     return 1
 }
 
+# ---- 解析启动参数 ----
+parse_port() {
+    local port=18789
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --port) port="$2"; shift 2 ;;
+            --port=*) port="${1#*=}"; shift ;;
+            *) shift ;;
+        esac
+    done
+    echo "$port"
+}
+
+parse_dashboard_url() {
+    local port
+    port=$(parse_port "$@")
+    local host="127.0.0.1"
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --bind)
+                [[ "$2" == "lan" ]] && host=$(hostname 2>/dev/null || echo "localhost")
+                shift 2 ;;
+            --bind=*)
+                [[ "${1#*=}" == "lan" ]] && host=$(hostname 2>/dev/null || echo "localhost")
+                shift ;;
+            *) shift ;;
+        esac
+    done
+    echo "http://$host:$port/"
+}
+
 # ---- 终止进程 ----
 stop_process() {
     local pid="$1"
@@ -74,11 +105,16 @@ cmd_start() {
     if pid=$(is_running); then
         echo "OpenClaw Gateway 已在运行中 (PID: $pid)"
         log_event "start" "已在运行 (PID: $pid), 跳过"
+        echo ""
+        echo "Dashboard: $(parse_dashboard_url "$@")"
         return 0
     fi
 
     echo "正在后台启动 OpenClaw Gateway..."
     log_event "start" "开始启动 (参数: ${*:-无})"
+
+    local dashboard_url
+    dashboard_url=$(parse_dashboard_url "$@")
 
     nohup openclaw gateway run "$@" >> "$GATEWAY_LOG" 2>&1 &
     local bg_pid=$!
@@ -86,6 +122,12 @@ cmd_start() {
 
     echo "OpenClaw Gateway 已启动 (PID: $bg_pid)"
     echo "运行日志: $GATEWAY_LOG"
+
+    # 等待 Gateway 完成初始化
+    sleep 2
+
+    echo ""
+    echo "Dashboard: $dashboard_url"
     log_event "start" "启动成功 (PID: $bg_pid)"
 }
 
