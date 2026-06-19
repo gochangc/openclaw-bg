@@ -136,7 +136,7 @@ $wrapperPath = "$InstallDir\openclaw-bg.cmd"
 $lines = @(
     '@echo off',
     "set OPENCLAW_BG_HOME=$RepoDir",
-    "`"$bashExe`" `"%OPENCLAW_BG_HOME%\bin\openclaw-bg`" %*"
+    "`"$bashExe`" --login `"%OPENCLAW_BG_HOME%\bin\openclaw-bg`" %*"
 )
 $lines -join "`r`n" | Set-Content -Path $wrapperPath -Encoding ASCII
 
