@@ -7,10 +7,9 @@
     irm https://raw.githubusercontent.com/gochangc/openclaw-bg/master/install.ps1 | iex
 #>
 
-param(
-    [string]$InstallDir = "",
-    [string]$RepoDir = ""
-)
+# 使用普通变量而非 param() 块，因为 irm | iex 执行时 param() 会导致解析错误
+$InstallDir = ""
+$RepoDir = ""
 
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
