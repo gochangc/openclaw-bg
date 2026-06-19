@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     OpenClaw BG 安装脚本 (PowerShell)
 .DESCRIPTION
@@ -50,6 +50,7 @@ if ($bashCmd -and $bashCmd.Source -notlike "*WindowsApps*") {
 }
 
 # 方式2: 从 git 的安装位置推导 bash 路径（逐层向上搜索）
+$gitPath = Get-Command git -ErrorAction SilentlyContinue
 if (-not $bashExe -and $gitPath) {
     $dir = Split-Path -Parent $gitPath.Source
     for ($i = 0; $i -lt 4; $i++) {
@@ -85,22 +86,7 @@ Write-Info "[2/4] 准备目录"
 
 if (-not $RepoDir) { $RepoDir = "$env:USERPROFILE\.openclaw-bg" }
 if (-not $InstallDir) {
-    $candidates = @(
-        "$env:USERPROFILE\bin",
-        "$env:LOCALAPPDATA\Microsoft\WindowsApps",
-        "$env:APPDATA\npm"
-    )
-    $InstallDir = $null
-    foreach ($d in $candidates) {
-        $paths = $env:PATH -split ';' | ForEach-Object { $_.TrimEnd('\') }
-        if ($paths -contains $d.TrimEnd('\')) {
-            $InstallDir = $d
-            break
-        }
-    }
-    if (-not $InstallDir) {
-        $InstallDir = "$env:USERPROFILE\bin"
-    }
+    $InstallDir = "$env:USERPROFILE\bin"
 }
 
 Write-Host "  仓库: $RepoDir"
@@ -109,26 +95,36 @@ Write-Host ""
 
 # ---- [3/4] 下载仓库 ----
 Write-Info "[3/4] 下载仓库"
+Write-Host "  正在下载..."
 
 $ArchiveUrl = "https://github.com/gochangc/openclaw-bg/archive/refs/heads/master.zip"
-
-if (Test-Path $RepoDir) {
-    Remove-Item -Recurse -Force $RepoDir -ErrorAction SilentlyContinue
-}
-
-Write-Host "  正在下载..."
 $tmpZip = "$env:TEMP\openclaw-bg-$([System.IO.Path]::GetRandomFileName()).zip"
 $tmpDir = "$env:TEMP\openclaw-bg-$([System.IO.Path]::GetRandomFileName())"
+$downloadOk = $false
+
 try {
     Invoke-WebRequest -Uri $ArchiveUrl -OutFile $tmpZip
     Expand-Archive -Path $tmpZip -DestinationPath $tmpDir -Force
     $innerDir = Get-ChildItem -Directory $tmpDir | Select-Object -First 1
-    Move-Item "$($innerDir.FullName)\*" $RepoDir -Force
-    Write-Success "  下载完成"
+    # 移除旧仓库，安装新文件
+    if (Test-Path $RepoDir) {
+        Remove-Item -Recurse -Force $RepoDir -ErrorAction SilentlyContinue
+    }
+    Move-Item -Path "$($innerDir.FullName)" -Destination $RepoDir -Force
+    $downloadOk = $true
+} catch {
+    Write-Err "  下载失败: $_"
 } finally {
     Remove-Item -Recurse -Force $tmpDir -ErrorAction SilentlyContinue
     Remove-Item -Force $tmpZip -ErrorAction SilentlyContinue
 }
+
+# 验证下载结果
+if (-not $downloadOk -or -not (Test-Path "$RepoDir\bin\openclaw-bg")) {
+    Write-Err "  仓库下载不完整，请检查网络后重试"
+    return
+}
+Write-Success "  下载完成"
 
 Write-Host ""
 
@@ -154,11 +150,10 @@ $lines -join "`r`n" | Set-Content -Path $wrapperPath -Encoding ASCII
 Write-Success "  + openclaw-bg -> $wrapperPath"
 
 # 自动配置用户 PATH
-$paths = [Environment]::GetEnvironmentVariable("PATH", "User")
-if ($paths -notlike "*$InstallDir*") {
-    $newPath = "$InstallDir;$paths"
+$userPath = [Environment]::GetEnvironmentVariable("PATH", "User")
+if ($userPath -notlike "*$InstallDir*") {
+    $newPath = "$InstallDir;$userPath"
     [Environment]::SetEnvironmentVariable("PATH", $newPath, "User")
-    # 更新当前会话
     $env:PATH = "$InstallDir;$env:PATH"
     Write-Success "  + PATH 已自动配置 ($InstallDir)"
 } else {
