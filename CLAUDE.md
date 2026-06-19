@@ -86,3 +86,4 @@ openclaw-bg uninstall
 - **`exit` vs `return`**: `irm | iex` 远程执行时 `exit 1` 会直接杀死终端进程，`.ps1` 中必须用 `return`
 - **here-string**: PowerShell 的 `@""@` here-string 与 `%*` 等特殊字符可能冲突，用 `@()` 数组 + `-join` 更安全
 - **`write-error` 函数名**: 自定义函数 `Write-Error` 会覆盖内置 cmdlet，使用 `Write-Err` 代替
+- **UTF-8 BOM**: `.ps1` 文件包含中文时必须保存为 UTF-8 with BOM，否则 PowerShell 5.x 会按系统默认 ANSI 编码解析，导致中文字符损坏、脚本解析失败。`Set-Content -Encoding UTF8` 在 PS 5.x 下默认带 BOM
