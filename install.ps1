@@ -49,11 +49,14 @@ if ($bashCmd -and $bashCmd.Source -notlike "*WindowsApps*") {
     $bashExe = $bashCmd.Source
 }
 
-# 方式2: 从 git 的安装位置推导 bash 路径
+# 方式2: 从 git 的安装位置推导 bash 路径（逐层向上搜索）
 if (-not $bashExe -and $gitPath) {
-    $gitRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $gitPath.Source))
-    $candidate = Join-Path $gitRoot "usr\bin\bash.exe"
-    if (Test-Path $candidate) { $bashExe = $candidate }
+    $dir = Split-Path -Parent $gitPath.Source
+    for ($i = 0; $i -lt 4; $i++) {
+        $candidate = Join-Path $dir "usr\bin\bash.exe"
+        if (Test-Path $candidate) { $bashExe = $candidate; break }
+        $dir = Split-Path -Parent $dir
+    }
 }
 
 # 方式3: 遍历常见安装目录（多盘符）
