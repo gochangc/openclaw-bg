@@ -9,6 +9,9 @@
 # =============================================================================
 set -euo pipefail
 
+# ---- 确保 Git Bash 工具在 PATH 中（防止通过 .cmd wrapper 调用时 PATH 缺失） ----
+export PATH="/usr/bin:/mingw64/bin:$PATH"
+
 # ---- 确定项目根目录 ----
 if [[ -n "${OPENCLAW_BG_HOME:-}" ]]; then
     PROJECT_DIR="$OPENCLAW_BG_HOME"
