@@ -83,7 +83,9 @@ openclaw-bg uninstall
 
 - **PowerShell 编码**: `Invoke-WebRequest -OutFile` 保存时可能损坏 UTF-8 中文，导致解析错误。`irm` (Invoke-RestMethod) 直接返回字符串则无此问题
 - **PowerShell 终端显示**: 中文乱码是终端字体问题，不影响实际功能
+- **`param()` 与 `irm\|iex` 冲突**: `param()` 块只在脚本文件直接执行时有效，`irm\|iex` 会把 `[string]$Var = ""` 当作无效赋值表达式解析。应使用普通变量 `$Var = ""` 代替
+- **`<#...#>` 块注释与 BOM**: `irm\|iex` 获取的内容在 BOM 字符后跟 `<#` 时，PowerShell 无法识别块注释开头，导致 `.SYNOPSIS` 等被当作命令执行。用 `#` 行注释代替
+- **UTF-8 BOM 与 `irm\|iex`**: BOM 会导致脚本首字符被识别为 `?#` 而非 `#`，产生非致命但难看的第一行错误。`.ps1` 在 `irm\|iex` 为首要场景时**不应包含 BOM**
 - **`exit` vs `return`**: `irm | iex` 远程执行时 `exit 1` 会直接杀死终端进程，`.ps1` 中必须用 `return`
 - **here-string**: PowerShell 的 `@""@` here-string 与 `%*` 等特殊字符可能冲突，用 `@()` 数组 + `-join` 更安全
 - **`write-error` 函数名**: 自定义函数 `Write-Error` 会覆盖内置 cmdlet，使用 `Write-Err` 代替
-- **UTF-8 BOM**: `.ps1` 文件包含中文时必须保存为 UTF-8 with BOM，否则 PowerShell 5.x 会按系统默认 ANSI 编码解析，导致中文字符损坏、脚本解析失败。`Set-Content -Encoding UTF8` 在 PS 5.x 下默认带 BOM
