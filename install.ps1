@@ -7,7 +7,6 @@ $InstallDir = ""
 $RepoDir = ""
 
 $ErrorActionPreference = "Stop"
-$ProgressPreference = "SilentlyContinue"
 
 function Write-Info    { Write-Host $args -ForegroundColor Cyan }
 function Write-Success { Write-Host $args -ForegroundColor Green }
