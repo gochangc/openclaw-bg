@@ -38,7 +38,7 @@ openclaw-bg uninstall            # 卸载
 $ openclaw-bg start
 正在后台启动 OpenClaw Gateway...
 OpenClaw Gateway 已启动 (PID: 1618)
-运行日志: C:\Users\WalNut\.openclaw-bg\logs\gateway.log
+运行日志: ~/.openclaw-bg/logs/gateway.log
 
 Dashboard: http://127.0.0.1:18789/
 ```
