@@ -40,21 +40,35 @@ if ($openclawPath) {
     return
 }
 
-# 查找 bash
+# 查找 bash (Git Bash)
 $bashExe = $null
+
+# 方式1: 直接在 PATH 中找（排除 WSL 存根）
 $bashCmd = Get-Command bash -ErrorAction SilentlyContinue
 if ($bashCmd -and $bashCmd.Source -notlike "*WindowsApps*") {
     $bashExe = $bashCmd.Source
-} else {
-    $gitBashDirs = @(
-        "C:\Program Files\Git\usr\bin\bash.exe",
-        "C:\Program Files (x86)\Git\usr\bin\bash.exe",
-        "$env:LOCALAPPDATA\Programs\Git\usr\bin\bash.exe"
-    )
-    foreach ($p in $gitBashDirs) {
+}
+
+# 方式2: 从 git 的安装位置推导 bash 路径
+if (-not $bashExe -and $gitPath) {
+    $gitRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $gitPath.Source))
+    $candidate = Join-Path $gitRoot "usr\bin\bash.exe"
+    if (Test-Path $candidate) { $bashExe = $candidate }
+}
+
+# 方式3: 遍历常见安装目录（多盘符）
+if (-not $bashExe) {
+    $searchPaths = @()
+    foreach ($drive in @('C:', 'D:', 'E:')) {
+        $searchPaths += "$drive\Program Files\Git\usr\bin\bash.exe"
+        $searchPaths += "$drive\Program Files (x86)\Git\usr\bin\bash.exe"
+    }
+    $searchPaths += "$env:LOCALAPPDATA\Programs\Git\usr\bin\bash.exe"
+    foreach ($p in $searchPaths) {
         if (Test-Path $p) { $bashExe = $p; break }
     }
 }
+
 if (-not $bashExe) {
     Write-Err "  bash: 未找到 Git Bash，请先安装: https://git-scm.com"
     return
