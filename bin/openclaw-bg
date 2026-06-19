@@ -37,15 +37,42 @@ log_event() {
 }
 
 # ---- 检测是否已运行 ----
+# 优先通过端口占用检测，因为 Windows 上 openclaw 的 PID 文件路径不固定且格式为 JSON
 is_running() {
+    local port="$1"
+    if is_port_in_use "$port"; then
+        echo "port:$port"
+        return 0
+    fi
+
+    # 兼容旧的 PID 文件检测
     if [[ -f "$PID_FILE" ]]; then
         local pid
         pid="$(cat "$PID_FILE")"
-        if kill -0 "$pid" 2>/dev/null; then
+        # 兼容 JSON 格式：提取 pid 字段
+        if [[ "$pid" == *\"pid\"* ]]; then
+            pid="$(echo "$pid" | sed -n 's/.*"pid"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p')"
+        fi
+        if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
             echo "$pid"
             return 0
         fi
         rm -f "$PID_FILE"
+    fi
+    return 1
+}
+
+# ---- 端口占用检测 ----
+is_port_in_use() {
+    local port="${1:-18789}"
+    # Windows 使用 netstat；Linux/macOS 使用 ss 或 netstat
+    if command -v netstat >/dev/null 2>&1; then
+        netstat -an 2>/dev/null | grep -qE ":$port[[:space:]].*LISTEN"
+        return $?
+    fi
+    if command -v ss >/dev/null 2>&1; then
+        ss -ln 2>/dev/null | grep -qE ":$port[[:space:]]"
+        return $?
     fi
     return 1
 }
@@ -102,19 +129,21 @@ stop_process() {
 cmd_start() {
     mkdir -p "$STATE_DIR" "$LOG_DIR"
 
-    if pid=$(is_running); then
-        echo "OpenClaw Gateway 已在运行中 (PID: $pid)"
-        log_event "start" "已在运行 (PID: $pid), 跳过"
+    local port
+    port=$(parse_port "$@")
+    local dashboard_url
+    dashboard_url=$(parse_dashboard_url "$@")
+
+    if running=$(is_running "$port"); then
+        echo "OpenClaw Gateway 已在运行中 ($running)"
+        log_event "start" "已在运行 ($running), 跳过"
         echo ""
-        echo "Dashboard: $(parse_dashboard_url "$@")"
+        echo "Dashboard: $dashboard_url"
         return 0
     fi
 
     echo "正在后台启动 OpenClaw Gateway..."
     log_event "start" "开始启动 (参数: ${*:-无})"
-
-    local dashboard_url
-    dashboard_url=$(parse_dashboard_url "$@")
 
     nohup openclaw gateway run "$@" >> "$GATEWAY_LOG" 2>&1 &
     local bg_pid=$!
@@ -137,36 +166,52 @@ cmd_start() {
 cmd_stop() {
     mkdir -p "$LOG_DIR"
 
-    if [[ ! -f "$PID_FILE" ]]; then
-        echo "OpenClaw Gateway 未在运行（PID 文件不存在）"
-        log_event "stop" "PID 文件不存在，无需停止"
-        return 0
-    fi
+    local port
+    port=$(parse_port)
 
-    local pid
-    pid="$(cat "$PID_FILE")"
-
-    if ! kill -0 "$pid" 2>/dev/null; then
-        echo "OpenClaw Gateway 未在运行（进程 $pid 已不存在）"
+    # 优先通过端口占用检测
+    if ! is_port_in_use "$port"; then
+        echo "OpenClaw Gateway 未在运行（端口 $port 未监听）"
+        log_event "stop" "端口 $port 未监听，无需停止"
         rm -f "$PID_FILE"
-        log_event "stop" "进程 $pid 已不存在，清理 PID"
         return 0
     fi
 
-    echo "正在停止 OpenClaw Gateway (PID: $pid)..."
-    log_event "stop" "开始停止 (PID: $pid)"
-    stop_process "$pid"
-    rm -f "$PID_FILE"
+    # 如果旧 PID 文件存在，尝试用它停止
+    if [[ -f "$PID_FILE" ]]; then
+        local pid
+        pid="$(cat "$PID_FILE")"
+        # 兼容 JSON 格式：提取 pid 字段
+        if [[ "$pid" == *\"pid\"* ]]; then
+            pid="$(echo "$pid" | sed -n 's/.*"pid"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p')"
+        fi
+        if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+            echo "正在停止 OpenClaw Gateway (PID: $pid)..."
+            log_event "stop" "开始停止 (PID: $pid)"
+            stop_process "$pid"
+        fi
+        rm -f "$PID_FILE"
+        echo "OpenClaw Gateway 已停止"
+        log_event "stop" "停止成功"
+        return 0
+    fi
+
+    # 兜底：使用 openclaw gateway stop
+    echo "通过 openclaw gateway stop 停止服务..."
+    openclaw gateway stop 2>&1 || true
     echo "OpenClaw Gateway 已停止"
-    log_event "stop" "停止成功 (PID: $pid)"
+    log_event "stop" "通过 openclaw gateway stop 停止成功"
 }
 
 # ============================
 # 子命令: status
 # ============================
 cmd_status() {
-    if pid=$(is_running); then
-        echo "OpenClaw Gateway 运行中 (PID: $pid)"
+    local port
+    port=$(parse_port)
+    if running=$(is_running "$port"); then
+        echo "OpenClaw Gateway 运行中 ($running)"
+        echo "Dashboard: $(parse_dashboard_url)"
         echo "运行日志: $GATEWAY_LOG"
     else
         echo "OpenClaw Gateway 未运行"
@@ -180,9 +225,20 @@ cmd_uninstall() {
     echo "正在卸载 OpenClaw BG..."
 
     # 停止 Gateway
-    if pid=$(is_running); then
-        echo "  停止运行中的 Gateway (PID: $pid)..."
-        stop_process "$pid"
+    local port
+    port=$(parse_port)
+    if running=$(is_running "$port"); then
+        echo "  停止运行中的 Gateway ($running)..."
+        if [[ -f "$PID_FILE" ]]; then
+            local pid
+            pid="$(cat "$PID_FILE")"
+            if [[ "$pid" == *\"pid\"* ]]; then
+                pid="$(echo "$pid" | sed -n 's/.*"pid"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p')"
+            fi
+            if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+                stop_process "$pid"
+            fi
+        fi
         rm -f "$PID_FILE"
     fi
 
