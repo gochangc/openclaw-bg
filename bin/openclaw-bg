@@ -163,11 +163,27 @@ cmd_start() {
     echo "正在后台启动 OpenClaw Gateway..."
     log_event "start" "开始启动 (参数: ${*:-无})"
 
-    # Windows 下用 cmd.exe 的 start /B 后台启动，关闭终端后仍保持运行
-    # start /B 会创建独立进程，不绑定当前终端窗口
-    # npm 安装的 openclaw 会生成 openclaw.cmd，cmd.exe 可直接识别
+    # Windows 下用 PowerShell Start-Process -WindowStyle Hidden 启动
+    # 进程完全脱离当前控制台（CREATE_NO_WINDOW），taskkill 不会损坏终端
     if command -v cmd.exe >/dev/null 2>&1; then
-        cmd.exe //c "start /B openclaw gateway run $*" >/dev/null 2>&1
+        local openclaw_cmd
+        openclaw_cmd=$(cmd.exe //c "where openclaw.cmd" 2>/dev/null | tr -d '\r')
+        local openclaw_dir
+        openclaw_dir=$(dirname "$openclaw_cmd")
+        openclaw_dir=$(cygpath -w "$openclaw_dir" 2>/dev/null || echo "$openclaw_dir")
+        # 写临时 .ps1 启动脚本
+        local ps_file
+        ps_file="$TEMP/openclaw-bg-start-$RANDOM.ps1"
+        {
+            echo "\$psi = @{"
+            echo "  FilePath = 'powershell'"
+            echo "  ArgumentList = @('-NoProfile','-ExecutionPolicy','Bypass','-File','${openclaw_dir}\\\\openclaw.ps1','gateway','run')"
+            echo "  WindowStyle = 'Hidden'"
+            echo "}"
+            echo "Start-Process @psi"
+        } > "$ps_file"
+        powershell -NoProfile -ExecutionPolicy Bypass -File "$ps_file" >/dev/null 2>&1
+        rm -f "$ps_file"
     else
         # macOS / Linux：nohup 后台启动
         nohup openclaw gateway run "$@" >> "$GATEWAY_LOG" 2>&1 &
@@ -212,43 +228,39 @@ cmd_stop() {
         return 0
     fi
 
-    # 尝试从 PID 文件读取进程 ID
-    local pid=""
-    for pidfile in "$PID_FILE" "$HOME/AppData/Local/hermes/gateway.pid"; do
-        if [[ -f "$pidfile" ]]; then
-            pid="$(cat "$pidfile")"
-            # 兼容 JSON 格式：提取 pid 字段
-            if [[ "$pid" == *\"pid\"* ]]; then
-                pid="$(echo "$pid" | sed -n 's/.*"pid"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p')"
-            fi
-            if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
-                break
-            fi
-            pid=""
-        fi
-    done
+    echo "正在停止 OpenClaw Gateway (端口: $port)..."
+    log_event "stop" "开始停止 (端口: $port)"
 
-    if [[ -n "$pid" ]]; then
-        echo "正在停止 OpenClaw Gateway (PID: $pid)..."
-        log_event "stop" "开始停止 (PID: $pid)"
-        stop_process "$pid"
+    # 通过端口查找进程 PID
+    local target_pid=""
+    if command -v cmd.exe >/dev/null 2>&1; then
+        # Windows: 用 netstat 找 PID
+        target_pid=$(cmd.exe //c "netstat -ano" 2>/dev/null | grep -E ":$port[[:space:]].*LISTEN" | awk '{print $5}' | tail -1)
+    else
+        # macOS / Linux: 用 lsof 或 ss 找 PID
+        if command -v lsof >/dev/null 2>&1; then
+            target_pid=$(lsof -ti ":$port" 2>/dev/null | tail -1)
+        elif command -v ss >/dev/null 2>&1; then
+            target_pid=$(ss -tlnp "sport = :$port" 2>/dev/null | grep -oP 'pid=\K[0-9]+' | tail -1)
+        fi
+    fi
+
+    if [[ -n "$target_pid" ]] && [[ "$target_pid" != "0" ]]; then
+        if command -v cmd.exe >/dev/null 2>&1; then
+            # Windows: 用 taskkill /F 终止
+            cmd.exe //c "taskkill /PID $target_pid /F" >/dev/null 2>&1 || true
+        else
+            # macOS / Linux: 用 kill
+            kill "$target_pid" 2>/dev/null || true
+            sleep 1
+            kill -9 "$target_pid" 2>/dev/null || true
+        fi
         rm -f "$PID_FILE"
         echo "OpenClaw Gateway 已停止"
-        log_event "stop" "停止成功"
+        log_event "stop" "停止成功 (PID: $target_pid)"
     else
-        # 无 PID 文件，通过端口查找进程并终止
-        echo "正在停止 OpenClaw Gateway (端口: $port)..."
-        log_event "stop" "通过端口 $port 查找进程"
-        if command -v cmd.exe >/dev/null 2>&1; then
-            # Windows: 用 netstat 找 PID，taskkill 终止
-            local win_pid
-            win_pid=$(cmd.exe //c "netstat -ano" 2>/dev/null | grep -E ":$port[[:space:]].*LISTEN" | awk '{print $5}' | tail -1)
-            if [[ -n "$win_pid" ]] && [[ "$win_pid" != "0" ]]; then
-                cmd.exe //c "taskkill /PID $win_pid /F" >/dev/null 2>&1 || true
-            fi
-        fi
-        echo "OpenClaw Gateway 已停止"
-        log_event "stop" "停止成功"
+        echo "OpenClaw Gateway 未在运行"
+        log_event "stop" "未找到监听进程"
     fi
 }
 
