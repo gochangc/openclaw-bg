@@ -45,20 +45,22 @@ is_running() {
         return 0
     fi
 
-    # 兼容旧的 PID 文件检测
-    if [[ -f "$PID_FILE" ]]; then
-        local pid
-        pid="$(cat "$PID_FILE")"
-        # 兼容 JSON 格式：提取 pid 字段
-        if [[ "$pid" == *\"pid\"* ]]; then
-            pid="$(echo "$pid" | sed -n 's/.*"pid"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p')"
+    # 兼容 PID 文件检测（含 Windows hermes 路径）
+    local pid=""
+    for pidfile in "$PID_FILE" "$HOME/AppData/Local/hermes/gateway.pid"; do
+        if [[ -f "$pidfile" ]]; then
+            pid="$(cat "$pidfile")"
+            # 兼容 JSON 格式：提取 pid 字段
+            if [[ "$pid" == *\"pid\"* ]]; then
+                pid="$(echo "$pid" | sed -n 's/.*"pid"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p')"
+            fi
+            if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+                echo "$pid"
+                return 0
+            fi
         fi
-        if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
-            echo "$pid"
-            return 0
-        fi
-        rm -f "$PID_FILE"
-    fi
+    done
+    rm -f "$PID_FILE"
     return 1
 }
 
@@ -67,8 +69,8 @@ is_port_in_use() {
     local port="${1:-18789}"
     # 优先通过 curl 访问 Gateway 健康检查端点
     if command -v curl >/dev/null 2>&1; then
-        curl -fsS "http://127.0.0.1:$port/health" >/dev/null 2>&1 || \
-        curl -fsS "http://127.0.0.1:$port/" >/dev/null 2>&1
+        curl -fsS --connect-timeout 2 --max-time 5 "http://127.0.0.1:$port/health" >/dev/null 2>&1 || \
+        curl -fsS --connect-timeout 2 --max-time 5 "http://127.0.0.1:$port/" >/dev/null 2>&1
         return $?
     fi
     # 回退到 netstat/ss
@@ -112,21 +114,6 @@ parse_dashboard_url() {
         esac
     done
     echo "http://$host:$port/"
-}
-
-# ---- 终止进程 ----
-stop_process() {
-    local pid="$1"
-    if kill "$pid" 2>/dev/null; then
-        for _ in $(seq 1 10); do
-            if ! kill -0 "$pid" 2>/dev/null; then
-                return 0
-            fi
-            sleep 1
-        done
-        kill -9 "$pid" 2>/dev/null || true
-    fi
-    return 0
 }
 
 # ---- 清空 Windows wrapper 内容（避免 .cmd 自删除报错） ----
@@ -174,10 +161,15 @@ cmd_start() {
         # 写临时 .ps1 启动脚本
         local ps_file
         ps_file="$TEMP/openclaw-bg-start-$RANDOM.ps1"
+        # 构建参数列表，包含用户传入的额外参数
+        local extra_args=""
+        if [[ -n "$*" ]]; then
+            extra_args=",'$*'"
+        fi
         {
             echo "\$psi = @{"
             echo "  FilePath = 'powershell'"
-            echo "  ArgumentList = @('-NoProfile','-ExecutionPolicy','Bypass','-File','${openclaw_dir}\\\\openclaw.ps1','gateway','run')"
+            echo "  ArgumentList = @('-NoProfile','-ExecutionPolicy','Bypass','-File','${openclaw_dir}\\\\openclaw.ps1','gateway','run'${extra_args})"
             echo "  WindowStyle = 'Hidden'"
             echo "}"
             echo "Start-Process @psi"
@@ -234,8 +226,8 @@ cmd_stop() {
     # 通过端口查找进程 PID
     local target_pid=""
     if command -v cmd.exe >/dev/null 2>&1; then
-        # Windows: 用 netstat 找 PID
-        target_pid=$(cmd.exe //c "netstat -ano" 2>/dev/null | grep -E ":$port[[:space:]].*LISTEN" | awk '{print $5}' | tail -1)
+        # Windows: 用 netstat 找 PID（精确匹配 LISTENING 状态，排除 ESTABLISHED 等）
+        target_pid=$(cmd.exe //c "netstat -ano" 2>/dev/null | grep -E ":$port[[:space:]]" | grep "LISTENING" | awk '{print $5}' | tail -1)
     else
         # macOS / Linux: 用 lsof 或 ss 找 PID
         if command -v lsof >/dev/null 2>&1; then
@@ -285,12 +277,25 @@ cmd_status() {
 cmd_uninstall() {
     echo "正在卸载 OpenClaw BG..."
 
-    # 停止 Gateway
+    # 停止 Gateway（复用 cmd_stop 的逻辑，避免 openclaw gateway stop 损坏终端）
     local port
     port=$(parse_port)
     if is_running "$port" >/dev/null; then
         echo "  停止运行中的 Gateway..."
-        openclaw gateway stop >> "$GATEWAY_LOG" 2>&1 || true
+        local target_pid=""
+        if command -v cmd.exe >/dev/null 2>&1; then
+            target_pid=$(cmd.exe //c "netstat -ano" 2>/dev/null | grep -E ":$port[[:space:]].*LISTEN" | awk '{print $5}' | tail -1)
+            if [[ -n "$target_pid" ]] && [[ "$target_pid" != "0" ]]; then
+                cmd.exe //c "taskkill /PID $target_pid /F" >/dev/null 2>&1 || true
+            fi
+        else
+            if command -v lsof >/dev/null 2>&1; then
+                target_pid=$(lsof -ti ":$port" 2>/dev/null | tail -1)
+            fi
+            if [[ -n "$target_pid" ]]; then
+                kill "$target_pid" 2>/dev/null || true
+            fi
+        fi
         rm -f "$PID_FILE"
     fi
 

@@ -37,8 +37,7 @@ openclaw-bg uninstall            # 卸载
 ```
 $ openclaw-bg start
 正在后台启动 OpenClaw Gateway...
-OpenClaw Gateway 已启动 (PID: 1618)
-运行日志: ~/.openclaw-bg/logs/gateway.log
+OpenClaw Gateway 已启动 (port:18789)
 
 Dashboard: http://127.0.0.1:18789/
 ```
@@ -48,8 +47,8 @@ Dashboard: http://127.0.0.1:18789/
 | 命令 | 说明 |
 |------|------|
 | `start [参数...]` | 后台启动 Gateway，参数透传给 `openclaw gateway run` |
-| `stop` | 停止 Gateway（SIGTERM → 10s 等待 → SIGKILL） |
-| `status` | 查看 Gateway 运行状态和 PID |
+| `stop` | 停止 Gateway（通过端口查找进程并终止） |
+| `status` | 查看 Gateway 运行状态 |
 | `help` | 显示帮助信息 |
 | `uninstall` | 停止服务并清理安装文件 |
 
