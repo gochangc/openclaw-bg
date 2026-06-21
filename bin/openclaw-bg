@@ -163,18 +163,13 @@ cmd_start() {
     echo "正在后台启动 OpenClaw Gateway..."
     log_event "start" "开始启动 (参数: ${*:-无})"
 
-    # Windows 下使用 VBScript 在隐藏窗口中启动，关闭终端后仍保持运行
-    if command -v cscript >/dev/null 2>&1; then
-        local vbs_file
-        vbs_file="$TEMP/openclaw-bg-start-$RANDOM.vbs"
-        {
-            echo 'Set WshShell = CreateObject("WScript.Shell")'
-            echo "WshShell.Run \"openclaw gateway run $*\", 0, False"
-        } > "$vbs_file"
-        cscript //nologo "$vbs_file" >/dev/null 2>&1
-        rm -f "$vbs_file"
+    # Windows 下用 cmd.exe 的 start /B 后台启动，关闭终端后仍保持运行
+    # start /B 会创建独立进程，不绑定当前终端窗口
+    # npm 安装的 openclaw 会生成 openclaw.cmd，cmd.exe 可直接识别
+    if command -v cmd.exe >/dev/null 2>&1; then
+        cmd.exe /c "start /B openclaw gateway run $*" >/dev/null 2>&1
     else
-        # 回退到 nohup（macOS / Linux）
+        # macOS / Linux：nohup 后台启动
         nohup openclaw gateway run "$@" >> "$GATEWAY_LOG" 2>&1 &
     fi
 
