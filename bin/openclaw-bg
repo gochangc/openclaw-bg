@@ -283,7 +283,9 @@ cmd_uninstall() {
     rm -f "$PID_FILE"
 
     # 后台删除项目目录（当前进程还在使用）
+    # 必须先切换工作目录，否则删除当前目录会导致 bash 进程异常、终端损坏
     echo "  清理项目文件..."
+    cd /
     (sleep 1; rm -rf "$PROJECT_DIR") &
 
     echo ""
