@@ -129,6 +129,18 @@ stop_process() {
     return 0
 }
 
+# ---- 清空 Windows wrapper 内容（避免 .cmd 自删除报错） ----
+# Windows 下 cmd.exe 执行 .cmd 文件后会检查文件是否存在，若在执行期间被删除
+# 则报 "找不到批处理文件"。解决方案：不清除文件，而是替换为空操作内容。
+neutralize_wrapper() {
+    local wrapper="$1"
+    if [[ ! -f "$wrapper" ]]; then
+        return 0
+    fi
+    # 覆盖为仅显示提示信息的空操作 wrapper
+    printf '@echo off\r\necho OpenClaw BG has been uninstalled.\r\n' > "$wrapper"
+}
+
 # ============================
 # 子命令: start
 # ============================
@@ -151,20 +163,34 @@ cmd_start() {
     echo "正在后台启动 OpenClaw Gateway..."
     log_event "start" "开始启动 (参数: ${*:-无})"
 
-    # 使用 nohup + & 后台启动，关闭终端后仍保持运行
-    nohup openclaw gateway run "$@" >> "$GATEWAY_LOG" 2>&1 &
-    local bg_pid=$!
-    echo $bg_pid > "$PID_FILE"
-
-    echo "OpenClaw Gateway 已启动 (PID: $bg_pid)"
-    echo "运行日志: $GATEWAY_LOG"
+    # Windows 下使用 VBScript 在隐藏窗口中启动，关闭终端后仍保持运行
+    if command -v cscript >/dev/null 2>&1; then
+        local vbs_file
+        vbs_file="$TEMP/openclaw-bg-start-$RANDOM.vbs"
+        {
+            echo 'Set WshShell = CreateObject("WScript.Shell")'
+            echo "WshShell.Run \"openclaw gateway run $*\", 0, False"
+        } > "$vbs_file"
+        cscript //nologo "$vbs_file" >/dev/null 2>&1
+        rm -f "$vbs_file"
+    else
+        # 回退到 nohup（macOS / Linux）
+        nohup openclaw gateway run "$@" >> "$GATEWAY_LOG" 2>&1 &
+    fi
 
     # 等待 Gateway 完成初始化
     sleep 2
 
-    echo ""
-    echo "Dashboard: $dashboard_url"
-    log_event "start" "启动成功 (PID: $bg_pid)"
+    if running=$(is_running "$port"); then
+        echo "OpenClaw Gateway 已启动 ($running)"
+        echo ""
+        echo "Dashboard: $dashboard_url"
+        log_event "start" "启动成功 ($running)"
+    else
+        echo "OpenClaw Gateway 启动失败，请查看日志: $GATEWAY_LOG"
+        log_event "start" "启动失败"
+        return 1
+    fi
 }
 
 # ============================
@@ -241,24 +267,19 @@ cmd_uninstall() {
         rm -f "$PID_FILE"
     fi
 
-    # 找到并删除 wrapper
+    # 清空 wrapper 内容（不删除文件，避免 cmd.exe 报 "找不到批处理文件"）
     local wrapper=""
     if [[ -f "$WRAPPER_FILE" ]]; then
         wrapper="$(cat "$WRAPPER_FILE")"
         echo "  移除命令: $wrapper"
-        rm -f "$wrapper"
+        neutralize_wrapper "$wrapper"
+        rm -f "$WRAPPER_FILE"
     fi
 
-    # 额外搜索 PATH 中的 wrapper
+    # 额外搜索 PATH 中的 wrapper（排除正在执行的 .cmd 和核心脚本）
     local found
     found="$(which openclaw-bg 2>/dev/null || true)"
-    if [[ -n "$found" ]] && [[ "$found" != "$PROJECT_DIR/bin/openclaw-bg" ]]; then
-        echo "  移除命令: $found"
-        rm -f "$found"
-    fi
-    # Windows .cmd wrapper
-    found="$(which openclaw-bg.cmd 2>/dev/null || true)"
-    if [[ -n "$found" ]]; then
+    if [[ -n "$found" ]] && [[ "$found" != "$PROJECT_DIR/bin/openclaw-bg" ]] && [[ "$found" != "$wrapper" ]]; then
         echo "  移除命令: $found"
         rm -f "$found"
     fi
