@@ -1,4 +1,3 @@
-
 # OpenClaw BG 安装脚本 (PowerShell)
 # 一键安装 openclaw-bg，自动下载仓库、配置 PATH
 # 用法: irm https://raw.githubusercontent.com/gochangc/openclaw-bg/master/install.ps1 | iex
