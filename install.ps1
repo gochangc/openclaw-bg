@@ -1,3 +1,4 @@
+﻿
 # OpenClaw BG 安装脚本 (PowerShell)
 # 一键安装 openclaw-bg，自动下载仓库、配置 PATH
 # 用法: irm https://raw.githubusercontent.com/gochangc/openclaw-bg/master/install.ps1 | iex
@@ -133,12 +134,12 @@ if (-not (Test-Path $InstallDir)) {
 
 # 创建 .cmd wrapper
 $wrapperPath = "$InstallDir\openclaw-bg.cmd"
-$lines = @(
+$wrapperLines = @(
     '@echo off',
     "set OPENCLAW_BG_HOME=$RepoDir",
     "`"$bashExe`" --login `"%OPENCLAW_BG_HOME%\bin\openclaw-bg`" %*"
 )
-$lines -join "`r`n" | Set-Content -Path $wrapperPath -Encoding ASCII
+$wrapperLines -join "`r`n" | Set-Content -Path $wrapperPath -Encoding ASCII
 
 Write-Success "  + openclaw-bg -> $wrapperPath"
 
