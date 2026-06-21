@@ -212,31 +212,44 @@ cmd_stop() {
         return 0
     fi
 
-    # 如果 PID 文件存在，尝试用它停止
-    if [[ -f "$PID_FILE" ]]; then
-        local pid
-        pid="$(cat "$PID_FILE")"
-        # 兼容 JSON 格式：提取 pid 字段
-        if [[ "$pid" == *\"pid\"* ]]; then
-            pid="$(echo "$pid" | sed -n 's/.*"pid"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p')"
+    # 尝试从 PID 文件读取进程 ID
+    local pid=""
+    for pidfile in "$PID_FILE" "$HOME/AppData/Local/hermes/gateway.pid"; do
+        if [[ -f "$pidfile" ]]; then
+            pid="$(cat "$pidfile")"
+            # 兼容 JSON 格式：提取 pid 字段
+            if [[ "$pid" == *\"pid\"* ]]; then
+                pid="$(echo "$pid" | sed -n 's/.*"pid"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p')"
+            fi
+            if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+                break
+            fi
+            pid=""
         fi
-        if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
-            echo "正在停止 OpenClaw Gateway (PID: $pid)..."
-            log_event "stop" "开始停止 (PID: $pid)"
-            stop_process "$pid"
-            rm -f "$PID_FILE"
-            echo "OpenClaw Gateway 已停止"
-            log_event "stop" "停止成功"
-            return 0
-        fi
-        rm -f "$PID_FILE"
-    fi
+    done
 
-    # 兜底：通过 openclaw gateway stop 停止服务
-    echo "通过 openclaw gateway stop 停止服务..."
-    openclaw gateway stop >> "$GATEWAY_LOG" 2>&1 || true
-    echo "OpenClaw Gateway 已停止"
-    log_event "stop" "通过 openclaw gateway stop 停止成功"
+    if [[ -n "$pid" ]]; then
+        echo "正在停止 OpenClaw Gateway (PID: $pid)..."
+        log_event "stop" "开始停止 (PID: $pid)"
+        stop_process "$pid"
+        rm -f "$PID_FILE"
+        echo "OpenClaw Gateway 已停止"
+        log_event "stop" "停止成功"
+    else
+        # 无 PID 文件，通过端口查找进程并终止
+        echo "正在停止 OpenClaw Gateway (端口: $port)..."
+        log_event "stop" "通过端口 $port 查找进程"
+        if command -v cmd.exe >/dev/null 2>&1; then
+            # Windows: 用 netstat 找 PID，taskkill 终止
+            local win_pid
+            win_pid=$(cmd.exe //c "netstat -ano" 2>/dev/null | grep -E ":$port[[:space:]].*LISTEN" | awk '{print $5}' | tail -1)
+            if [[ -n "$win_pid" ]] && [[ "$win_pid" != "0" ]]; then
+                cmd.exe //c "taskkill /PID $win_pid /F" >/dev/null 2>&1 || true
+            fi
+        fi
+        echo "OpenClaw Gateway 已停止"
+        log_event "stop" "停止成功"
+    fi
 }
 
 # ============================
