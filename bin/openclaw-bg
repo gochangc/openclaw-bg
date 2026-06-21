@@ -293,6 +293,10 @@ cmd_uninstall() {
 
     echo ""
     echo "OpenClaw BG 已卸载"
+    if [[ -n "$wrapper" ]]; then
+        echo ""
+        echo "请手动删除残留文件: $wrapper"
+    fi
     log_event "uninstall" "卸载完成"
 }
 
