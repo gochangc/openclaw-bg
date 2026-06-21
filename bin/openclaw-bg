@@ -167,7 +167,7 @@ cmd_start() {
     # start /B 会创建独立进程，不绑定当前终端窗口
     # npm 安装的 openclaw 会生成 openclaw.cmd，cmd.exe 可直接识别
     if command -v cmd.exe >/dev/null 2>&1; then
-        cmd.exe /c "start /B openclaw gateway run $*" >/dev/null 2>&1
+        cmd.exe //c "start /B openclaw gateway run $*" >/dev/null 2>&1
     else
         # macOS / Linux：nohup 后台启动
         nohup openclaw gateway run "$@" >> "$GATEWAY_LOG" 2>&1 &
