@@ -173,8 +173,15 @@ cmd_start() {
         nohup openclaw gateway run "$@" >> "$GATEWAY_LOG" 2>&1 &
     fi
 
-    # 等待 Gateway 完成初始化
-    sleep 2
+    # 等待 Gateway 完成初始化（最多 3 分钟，每 3 秒检测一次）
+    local waited=0
+    while [[ $waited -lt 180 ]]; do
+        if running=$(is_running "$port"); then
+            break
+        fi
+        sleep 3
+        waited=$((waited + 3))
+    done
 
     if running=$(is_running "$port"); then
         echo "OpenClaw Gateway 已启动 ($running)"
